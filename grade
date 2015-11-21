@@ -1,0 +1,44 @@
+#!/bin/zsh
+
+# Make the whole pipe fail on error (timeout | solver | judge)
+set -o pipefail
+
+TL=15
+MARGIN=2
+RTL=$(($TL + $MARGIN))
+
+for hw; do  # homeworks/*/
+	bhw=$(basename $hw)
+	if [[ -f $hw ]] exit 99;
+
+	echo "Judging $bhw"
+
+	ok=0
+	for i in `find "instances/" -name "*.pl"`; do
+
+		file=$(basename $i)
+		mix="$hw/.$file"
+		out="$hw/.$file.out"
+		err="$hw/.$file.err"
+
+		rm "$mix" 2> /dev/null
+		rm "$out" 2> /dev/null
+		rm "$err" 2> /dev/null
+
+		if java Mix "$hw/parte1.pl" "$i" > "$mix"; then
+		else
+			printf "[%-20s]   Mix failed for $i\n" "$bhw"
+			continue
+		fi
+
+		timeout --kill-after $RTL $TL\
+			swipl -s "$mix" -g "l(S), pp(S), nl, halt." -t "halt(9)." > "$out" 2> "$err"
+
+		if cat "$out" | java Verify $i 2>> "$err" | awk '{print "  "$0}'; then
+			((ok++))
+		fi
+	done
+
+	printf "[%-20s] score:$ok\n" "$bhw"
+
+done
